@@ -3,57 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meine Notizen</title>
+    <title>Notiz-Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#f8f9fa] min-h-screen p-4">
+<body class="bg-gray-50 min-h-screen p-4">
 
     <div class="max-w-md mx-auto">
-        <header class="flex justify-between items-center mb-6 pt-4">
-            <h1 class="text-2xl font-bold text-gray-900">Notizen</h1>
-            <div id="status" class="hidden text-xs font-semibold bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
-                Synchronisiere...
+        <header class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">Notizen</h1>
+            <div id="status" class="hidden text-xs bg-blue-500 text-white px-2 py-1 rounded animate-pulse">
+                Shortcut aktiv...
             </div>
         </header>
 
-        <div class="bg-white rounded-2xl p-4 shadow-sm mb-6 border border-gray-100">
-            <input id="note-title" type="text" placeholder="Titel" class="w-full mb-2 font-bold outline-none text-gray-800">
-            <textarea id="note-content" rows="4" placeholder="Deine Notiz..." 
-                      class="w-full border-none focus:ring-0 text-gray-600 resize-none outline-none"></textarea>
-            <button id="save-btn" class="mt-2 bg-blue-600 text-white px-4 py-3 rounded-xl font-bold w-full active:scale-95 transition-all">
-                Speichern
+        <div class="bg-white rounded-xl shadow-sm p-4 border border-gray-200 mb-6">
+            <input id="title" type="text" placeholder="Titel" class="w-full mb-2 font-semibold outline-none border-b pb-1 border-gray-100">
+            <textarea id="content" rows="4" placeholder="Inhalt..." class="w-full outline-none text-gray-700 resize-none mt-2"></textarea>
+            <button id="save" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold mt-4 hover:bg-blue-700 active:scale-95 transition-all">
+                Notiz Speichern
             </button>
         </div>
 
-        <div id="notes-container" class="space-y-3"></div>
+        <div id="list" class="space-y-3 text-sm text-gray-500 text-center">
+            Lade Daten...
+        </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
-            apiKey: "AIzaSyAs-u5v8M...", 
-            authDomain: "notizen-app-9706a.firebaseapp.com",
-            projectId: "notizen-app-9706a",
-            storageBucket: "notizen-app-9706a.appspot.com",
-            messagingSenderId: "37426365449",
-            appId: "1:37426365449:web:9f89370002f6a9c1356708"
+            apiKey: "AIzaSyAySiMGc3vbfkPwlTuLFnMRdZsBSLvZ1p8",
+            authDomain: "cooking-plan-12404.firebaseapp.com",
+            projectId: "cooking-plan-12404",
+            storageBucket: "cooking-plan-12404.firebasestorage.app",
+            messagingSenderId: "646774578838",
+            appId: "1:646774578838:web:11edbd32288f909a02acb7"
         };
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const notesCol = collection(db, "notes"); // Geändert auf 'notes' laut Screenshot
+        const notesRef = collection(db, "notes");
 
-        // Funktion zum Formatieren für Firebase (entspricht deinem Screenshot)
-        async function createNote(title, content, isShortcut = false) {
+        // Kernfunktion zum Speichern (Format laut deinem Screenshot)
+        async function saveToFirebase(t, c) {
             try {
-                await addDoc(notesCol, {
-                    title: title || (isShortcut ? "Schnellnotiz" : "Unbenannt"),
-                    content: content,
-                    folder: "Allgemein", // Standardwert laut Screenshot
-                    tags: [""],         // Array mit leerem String laut Screenshot
-                    updatedAt: Date.now() // Timestamp als Zahl
+                const docId = "note-" + Date.now(); // Ähnlich wie in deinem Screenshot
+                await addDoc(notesRef, {
+                    title: t || "Schnellnotiz",
+                    content: c,
+                    folder: "Allgemein",
+                    tags: [""],
+                    updatedAt: Date.now()
                 });
                 return true;
             } catch (e) {
@@ -62,45 +64,46 @@
             }
         }
 
-        // Shortcut Logik (?text=...)
-        const params = new URLSearchParams(window.location.search);
-        const quickText = params.get('text');
-        if (quickText) {
-            const status = document.getElementById('status');
-            status.classList.remove('hidden');
-            createNote("Schnellnotiz", quickText, true).then(() => {
-                status.innerText = "✅ Gespeichert";
+        // 1. Check auf Kurzbefehl-Parameter (?text=...)
+        const urlParams = new URLSearchParams(window.location.search);
+        const shortcutText = urlParams.get('text');
+
+        if (shortcutText) {
+            document.getElementById('status').classList.remove('hidden');
+            saveToFirebase("Kurzbefehl", shortcutText).then(() => {
+                document.getElementById('status').innerText = "✅ Gespeichert!";
+                // Parameter aus URL entfernen
                 window.history.replaceState({}, document.title, window.location.pathname);
-                setTimeout(() => status.classList.add('hidden'), 2000);
+                setTimeout(() => document.getElementById('status').classList.add('hidden'), 2000);
             });
         }
 
-        // Manuelles Speichern
-        document.getElementById('save-btn').onclick = async () => {
-            const title = document.getElementById('note-title').value;
-            const content = document.getElementById('note-content').value;
-            if (content.trim()) {
-                await createNote(title, content);
-                document.getElementById('note-title').value = '';
-                document.getElementById('note-content').value = '';
+        // 2. Button-Klick Logik
+        document.getElementById('save').onclick = async () => {
+            const t = document.getElementById('title').value;
+            const c = document.getElementById('content').value;
+            if (c.trim()) {
+                await saveToFirebase(t, c);
+                document.getElementById('title').value = '';
+                document.getElementById('content').value = '';
             }
         };
 
-        // Live-Liste
-        const q = query(notesCol, orderBy("updatedAt", "desc"));
+        // 3. Live-Anzeige der Notizen
+        const q = query(notesRef, orderBy("updatedAt", "desc"));
         onSnapshot(q, (snapshot) => {
-            const container = document.getElementById('notes-container');
-            container.innerHTML = '';
+            const list = document.getElementById('list');
+            list.innerHTML = '';
             snapshot.forEach((doc) => {
                 const data = doc.data();
-                const div = document.createElement('div');
-                div.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100";
-                div.innerHTML = `
-                    <h3 class="font-bold text-gray-900">${data.title}</h3>
-                    <p class="text-gray-600 text-sm mt-1">${data.content}</p>
-                    <div class="mt-2 text-[10px] text-gray-400 font-mono">${new Date(data.updatedAt).toLocaleString()}</div>
+                const card = document.createElement('div');
+                card.className = "bg-white p-4 rounded-lg shadow-sm border border-gray-100 text-left";
+                card.innerHTML = `
+                    <div class="font-bold text-gray-800">${data.title}</div>
+                    <div class="text-gray-600 mt-1">${data.content}</div>
+                    <div class="text-[10px] text-gray-400 mt-2 uppercase tracking-tighter">${new Date(data.updatedAt).toLocaleString()}</div>
                 `;
-                container.appendChild(div);
+                list.appendChild(card);
             });
         });
     </script>
