@@ -3,43 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notiz App</title>
+    <title>Meine Notizen</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .note-card { transition: all 0.2s ease; }
-        .note-card:hover { transform: translateY(-2px); shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    </style>
 </head>
-<body class="bg-[#f8f9fa] min-h-screen p-4 pb-20">
+<body class="bg-[#f8f9fa] min-h-screen p-4">
 
     <div class="max-w-md mx-auto">
         <header class="flex justify-between items-center mb-6 pt-4">
-            <h1 class="text-2xl font-bold text-gray-900">Meine Notizen</h1>
-            <div id="status" class="hidden text-xs font-semibold bg-blue-100 text-blue-700 px-3 py-1 rounded-full animate-pulse">
-                Speichere Shortcut...
+            <h1 class="text-2xl font-bold text-gray-900">Notizen</h1>
+            <div id="status" class="hidden text-xs font-semibold bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+                Synchronisiere...
             </div>
         </header>
 
         <div class="bg-white rounded-2xl p-4 shadow-sm mb-6 border border-gray-100">
-            <textarea id="note-input" rows="3" placeholder="Was willst du merken?" 
-                      class="w-full border-none focus:ring-0 text-gray-700 resize-none outline-none text-lg"></textarea>
-            <button id="save-btn" class="mt-2 bg-black text-white px-4 py-3 rounded-xl font-bold w-full active:scale-95 transition-transform">
-                Notiz speichern
+            <input id="note-title" type="text" placeholder="Titel" class="w-full mb-2 font-bold outline-none text-gray-800">
+            <textarea id="note-content" rows="4" placeholder="Deine Notiz..." 
+                      class="w-full border-none focus:ring-0 text-gray-600 resize-none outline-none"></textarea>
+            <button id="save-btn" class="mt-2 bg-blue-600 text-white px-4 py-3 rounded-xl font-bold w-full active:scale-95 transition-all">
+                Speichern
             </button>
         </div>
 
-        <div id="notes-container" class="space-y-3">
-            <div class="text-center py-10 text-gray-400">Lade Notizen...</div>
-        </div>
+        <div id="notes-container" class="space-y-3"></div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // Daten aus deinem Source Code
         const firebaseConfig = {
-            apiKey: "AIzaSyAs-u5v8M...", // Gekürzt, wird aus deinem Original übernommen
+            apiKey: "AIzaSyAs-u5v8M...", 
             authDomain: "notizen-app-9706a.firebaseapp.com",
             projectId: "notizen-app-9706a",
             storageBucket: "notizen-app-9706a.appspot.com",
@@ -49,65 +43,66 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const notesCol = collection(db, "notizen");
+        const notesCol = collection(db, "notes"); // Geändert auf 'notes' laut Screenshot
 
-        // Shortcut-Logik
-        const handleShortcut = async () => {
-            const params = new URLSearchParams(window.location.search);
-            const text = params.get('text');
-
-            if (text) {
-                const status = document.getElementById('status');
-                status.classList.remove('hidden');
-                try {
-                    await addDoc(notesCol, {
-                        content: text,
-                        createdAt: new Date(),
-                        type: 'shortcut'
-                    });
-                    status.innerText = "✅ Gespeichert!";
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                    setTimeout(() => status.classList.add('hidden'), 2000);
-                } catch (e) {
-                    status.innerText = "❌ Fehler";
-                }
+        // Funktion zum Formatieren für Firebase (entspricht deinem Screenshot)
+        async function createNote(title, content, isShortcut = false) {
+            try {
+                await addDoc(notesCol, {
+                    title: title || (isShortcut ? "Schnellnotiz" : "Unbenannt"),
+                    content: content,
+                    folder: "Allgemein", // Standardwert laut Screenshot
+                    tags: [""],         // Array mit leerem String laut Screenshot
+                    updatedAt: Date.now() // Timestamp als Zahl
+                });
+                return true;
+            } catch (e) {
+                console.error(e);
+                return false;
             }
-        };
+        }
+
+        // Shortcut Logik (?text=...)
+        const params = new URLSearchParams(window.location.search);
+        const quickText = params.get('text');
+        if (quickText) {
+            const status = document.getElementById('status');
+            status.classList.remove('hidden');
+            createNote("Schnellnotiz", quickText, true).then(() => {
+                status.innerText = "✅ Gespeichert";
+                window.history.replaceState({}, document.title, window.location.pathname);
+                setTimeout(() => status.classList.add('hidden'), 2000);
+            });
+        }
 
         // Manuelles Speichern
         document.getElementById('save-btn').onclick = async () => {
-            const input = document.getElementById('note-input');
-            if (input.value.trim()) {
-                await addDoc(notesCol, {
-                    content: input.value,
-                    createdAt: new Date(),
-                    type: 'manual'
-                });
-                input.value = '';
+            const title = document.getElementById('note-title').value;
+            const content = document.getElementById('note-content').value;
+            if (content.trim()) {
+                await createNote(title, content);
+                document.getElementById('note-title').value = '';
+                document.getElementById('note-content').value = '';
             }
         };
 
-        // Liste rendern
-        const container = document.getElementById('notes-container');
-        const q = query(notesCol, orderBy("createdAt", "desc"));
-
+        // Live-Liste
+        const q = query(notesCol, orderBy("updatedAt", "desc"));
         onSnapshot(q, (snapshot) => {
+            const container = document.getElementById('notes-container');
             container.innerHTML = '';
             snapshot.forEach((doc) => {
                 const data = doc.data();
                 const div = document.createElement('div');
-                div.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100 note-card";
+                div.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100";
                 div.innerHTML = `
-                    <p class="text-gray-800">${data.content}</p>
-                    <div class="text-[10px] text-gray-400 mt-2 uppercase tracking-wider font-bold">
-                        ${data.createdAt?.toDate().toLocaleString() || 'Neu'}
-                    </div>
+                    <h3 class="font-bold text-gray-900">${data.title}</h3>
+                    <p class="text-gray-600 text-sm mt-1">${data.content}</p>
+                    <div class="mt-2 text-[10px] text-gray-400 font-mono">${new Date(data.updatedAt).toLocaleString()}</div>
                 `;
                 container.appendChild(div);
             });
         });
-
-        handleShortcut();
     </script>
 </body>
 </html>
