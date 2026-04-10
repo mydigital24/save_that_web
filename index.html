@@ -3,30 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notiz-Editor</title>
+    <title>Notiz App</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 min-h-screen p-4">
 
     <div class="max-w-md mx-auto">
-        <header class="flex justify-between items-center mb-6">
-            <h1 class="text-2xl font-bold">Notizen</h1>
-            <div id="status" class="hidden text-xs bg-blue-500 text-white px-2 py-1 rounded animate-pulse">
-                Shortcut aktiv...
+        <header class="flex justify-between items-center mb-6 pt-4">
+            <h1 class="text-2xl font-bold text-gray-900">Notizen</h1>
+            <div id="status" class="hidden text-xs font-semibold bg-green-100 text-green-700 px-3 py-1 rounded-full animate-pulse">
+                Speichere...
             </div>
         </header>
 
-        <div class="bg-white rounded-xl shadow-sm p-4 border border-gray-200 mb-6">
-            <input id="title" type="text" placeholder="Titel" class="w-full mb-2 font-semibold outline-none border-b pb-1 border-gray-100">
-            <textarea id="content" rows="4" placeholder="Inhalt..." class="w-full outline-none text-gray-700 resize-none mt-2"></textarea>
-            <button id="save" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold mt-4 hover:bg-blue-700 active:scale-95 transition-all">
-                Notiz Speichern
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-6">
+            <input id="note-title" type="text" placeholder="Titel" class="w-full mb-3 font-bold text-lg outline-none border-b border-gray-50 pb-2">
+            <textarea id="note-body" rows="4" placeholder="Inhalt (Body)..." class="w-full text-gray-600 outline-none resize-none"></textarea>
+            <button id="save-btn" class="mt-4 bg-blue-600 text-white py-3 rounded-xl font-bold w-full active:scale-[0.98] transition-all hover:bg-blue-700">
+                In Firebase speichern
             </button>
         </div>
 
-        <div id="list" class="space-y-3 text-sm text-gray-500 text-center">
-            Lade Daten...
-        </div>
+        <div id="notes-list" class="space-y-3">
+            </div>
     </div>
 
     <script type="module">
@@ -46,62 +45,63 @@
         const db = getFirestore(app);
         const notesRef = collection(db, "notes");
 
-        // Kernfunktion zum Speichern (Format laut deinem Screenshot)
-        async function saveToFirebase(t, c) {
+        // Zentrale Speicherfunktion (Exakt dein Format)
+        async function pushNote(title, bodyValue) {
             try {
-                const docId = "note-" + Date.now(); // Ähnlich wie in deinem Screenshot
                 await addDoc(notesRef, {
-                    title: t || "Schnellnotiz",
-                    content: c,
+                    title: title || "Ohne Titel",
+                    body: bodyValue || "",
+                    content: bodyValue || "", // Falls du beide Felder identisch brauchst
                     folder: "Allgemein",
-                    tags: [""],
+                    tags: "", 
                     updatedAt: Date.now()
                 });
                 return true;
-            } catch (e) {
-                console.error(e);
+            } catch (err) {
+                console.error("Firebase Error:", err);
                 return false;
             }
         }
 
-        // 1. Check auf Kurzbefehl-Parameter (?text=...)
-        const urlParams = new URLSearchParams(window.location.search);
-        const shortcutText = urlParams.get('text');
-
-        if (shortcutText) {
-            document.getElementById('status').classList.remove('hidden');
-            saveToFirebase("Kurzbefehl", shortcutText).then(() => {
-                document.getElementById('status').innerText = "✅ Gespeichert!";
-                // Parameter aus URL entfernen
+        // 1. Kurzbefehl-Empfänger (?text=...)
+        const params = new URLSearchParams(window.location.search);
+        const text = params.get('text');
+        if (text) {
+            const status = document.getElementById('status');
+            status.classList.remove('hidden');
+            pushNote("Schnellnotiz", text).then(() => {
+                status.innerText = "✅ In Firebase gesichert";
                 window.history.replaceState({}, document.title, window.location.pathname);
-                setTimeout(() => document.getElementById('status').classList.add('hidden'), 2000);
+                setTimeout(() => status.classList.add('hidden'), 2500);
             });
         }
 
-        // 2. Button-Klick Logik
-        document.getElementById('save').onclick = async () => {
-            const t = document.getElementById('title').value;
-            const c = document.getElementById('content').value;
-            if (c.trim()) {
-                await saveToFirebase(t, c);
-                document.getElementById('title').value = '';
-                document.getElementById('content').value = '';
+        // 2. Manueller Button
+        document.getElementById('save-btn').onclick = async () => {
+            const t = document.getElementById('note-title').value;
+            const b = document.getElementById('note-body').value;
+            if (b.trim()) {
+                const success = await pushNote(t, b);
+                if (success) {
+                    document.getElementById('note-title').value = '';
+                    document.getElementById('note-body').value = '';
+                }
             }
         };
 
-        // 3. Live-Anzeige der Notizen
+        // 3. Liste anzeigen
         const q = query(notesRef, orderBy("updatedAt", "desc"));
-        onSnapshot(q, (snapshot) => {
-            const list = document.getElementById('list');
+        onSnapshot(q, (snap) => {
+            const list = document.getElementById('notes-list');
             list.innerHTML = '';
-            snapshot.forEach((doc) => {
+            snap.forEach(doc => {
                 const data = doc.data();
                 const card = document.createElement('div');
-                card.className = "bg-white p-4 rounded-lg shadow-sm border border-gray-100 text-left";
+                card.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100";
                 card.innerHTML = `
                     <div class="font-bold text-gray-800">${data.title}</div>
-                    <div class="text-gray-600 mt-1">${data.content}</div>
-                    <div class="text-[10px] text-gray-400 mt-2 uppercase tracking-tighter">${new Date(data.updatedAt).toLocaleString()}</div>
+                    <div class="text-sm text-gray-500 mt-1">${data.body || data.content}</div>
+                    <div class="text-[10px] text-gray-300 mt-2 font-mono">${data.updatedAt}</div>
                 `;
                 list.appendChild(card);
             });
